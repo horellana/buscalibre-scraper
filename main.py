@@ -17,7 +17,7 @@ HTTP_HEADERS = {
 
 def export_to_csv(books):
     fieldnames = ['title', 'author', 'discount_percentage', 'discount', 'original_price', 'price_with_discount', 'url']
-    writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+    writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames, delimiter=';')
 
     writer.writeheader()
 
