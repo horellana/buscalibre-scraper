@@ -1,6 +1,5 @@
 import re
 import sys
-import json
 import csv
 import logging
 import asyncio
@@ -14,6 +13,7 @@ BASE_URL = 'https://www.buscalibre.cl/libros-envio-express-chile_t.html'
 HTTP_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36'
 }
+
 
 def export_to_csv(books):
     fieldnames = ['title', 'author', 'discount_percentage', 'discount', 'original_price', 'price_with_discount', 'url']
@@ -36,7 +36,7 @@ def export_to_csv(books):
             writer.writerow(row)
 
         except:
-            print(f'Error with book : {book}', file=sys.stderr)
+            logging.error(f'Error with book : {book}')
             continue
 
 
@@ -116,19 +116,25 @@ async def get_page(http_session, n):
     return soup
 
 async def main():
+    logging.basicConfig(level=logging.DEBUG)
+
     async with aiohttp.ClientSession() as session:
         url = f'{BASE_URL}'
 
+        logging.info('Downloading first page to get total number of available books')
         response = await session.get(url, timeout=HTTP_TIMEOUT, headers=HTTP_HEADERS)
         response_html = await response.text()
         soup = BeautifulSoup(response_html, 'html.parser')
         number_of_books = get_number_of_books(soup)
 
+        logging.info('Calculating total number of pages to download')
         pages = get_number_of_pages(number_of_books)
 
+        logging.info('Downloading all pages concurrently')
         tasks = [get_page(session, i + 1) for i in range(pages)]
         pages = await asyncio.gather(*tasks)
 
+        logging.info('Getting books data')
         flatten = lambda l: [item for sublist in l for item in sublist]
         books = flatten(get_books(page) for page in pages)
 
