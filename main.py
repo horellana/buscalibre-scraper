@@ -104,7 +104,9 @@ def get_number_of_books(soup):
         number_of_books = float(''.join(match.group(1).split('.')))
         return number_of_books
     except Exception as e:
-        raise RuntimeException(f'Error when getting total number of available books: {e}')
+        msg = f'Error when getting total number of available books: {e}'
+        logger.error(msg)
+        raise RuntimeException(msg)
 
 async def get_page(http_session, n):
     url = f'{BASE_URL}?page={n}'
