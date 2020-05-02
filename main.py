@@ -1,6 +1,7 @@
 import re
 import sys
 import json
+import csv
 import logging
 import asyncio
 
@@ -13,6 +14,31 @@ BASE_URL = 'https://www.buscalibre.cl/libros-envio-express-chile_t.html'
 HTTP_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36'
 }
+
+def export_to_csv(books):
+    fieldnames = ['title', 'author', 'discount_percentage', 'discount', 'original_price', 'price_with_discount', 'url']
+    writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+
+    writer.writeheader()
+
+    for book in books:
+        try:
+            row = {
+                'title': book['title'],
+                'author': book['author'],
+                'discount_percentage': book['price']['discount_percentage'],
+                'discount': book['price']['discount'],
+                'original_price': book['price']['original'],
+                'price_with_discount': book['price']['with_discount'],
+                'url': book['url']
+            }
+
+            writer.writerow(row)
+
+        except:
+            print(f'Error with book : {book}', file=sys.stderr)
+            continue
+
 
 def get_book_publisher(book_div):
     return None
@@ -106,7 +132,9 @@ async def main():
         flatten = lambda l: [item for sublist in l for item in sublist]
         books = flatten(get_books(page) for page in pages)
 
-        print(json.dumps(books, indent=2))
+        # print(json.dumps(books, indent=2))
+
+        export_to_csv(books)
 
 
 if __name__ == '__main__':
