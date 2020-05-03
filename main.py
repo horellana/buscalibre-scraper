@@ -1,10 +1,10 @@
 import re
 import sys
 import csv
-import logging
 import asyncio
 
 import aiohttp
+from aiologger import Logger
 from bs4 import BeautifulSoup
 
 HTTP_TIMEOUT = 600
@@ -14,8 +14,10 @@ HTTP_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36'
 }
 
+logger = Logger.with_default_handlers(name=__name__)
 
-def export_to_csv(books):
+
+async def export_to_csv(books):
     fieldnames = ['title', 'author', 'discount_percentage', 'discount', 'original_price', 'price_with_discount', 'url']
     writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames, delimiter=';')
 
@@ -36,18 +38,20 @@ def export_to_csv(books):
             writer.writerow(row)
 
         except:
-            logging.error(f'Error with book : {book}')
+            await logger.error(f'Error with book : {book}')
             continue
 
 
 def get_book_publisher(book_div):
     return None
 
+
 def get_book_url(book_div):
     children = list(book_div.children)
     a = children[0]
 
     return a['href']
+
 
 def get_book_price(book_div):
     discount_text = book_div.find('div', class_='box-dcto col-xs-5').text
@@ -65,8 +69,9 @@ def get_book_price(book_div):
         'discount_percentage': discount,
         'discount': int(original_price * discount),
         'original': original_price,
-        'with_discount':int(original_price * (1 - discount))
+        'with_discount': int(original_price * (1 - discount))
     }
+
 
 def get_books(soup):
     selector = 'div.producto'
@@ -90,13 +95,15 @@ def get_books(soup):
 
     return result
 
+
 def get_number_of_pages(number_of_books):
     books_per_row = 7
     rows = 21
 
     return int(number_of_books / (books_per_row * rows)) + 10
 
-def get_number_of_books(soup):
+
+async def get_number_of_books(soup):
     try:
         selector = '.cantidadProductos'
         div = soup.select_one(selector)
@@ -105,8 +112,9 @@ def get_number_of_books(soup):
         return number_of_books
     except Exception as e:
         msg = f'Error when getting total number of available books: {e}'
-        logger.error(msg)
-        raise RuntimeException(msg)
+        await logger.error(msg)
+        raise RuntimeError(msg)
+
 
 async def get_page(http_session, n):
     url = f'{BASE_URL}?page={n}'
@@ -115,35 +123,33 @@ async def get_page(http_session, n):
     response_html = await response.text()
 
     soup = BeautifulSoup(response_html, 'html.parser')
+
+    await logger.debug(f'GET {url}')
     return soup
 
-async def main():
-    logging.basicConfig(level=logging.DEBUG)
 
+async def main():
     async with aiohttp.ClientSession() as session:
         url = f'{BASE_URL}'
 
-        logging.info('Downloading first page to get total number of available books')
+        await logger.info('Downloading first page to get total number of available books')
         response = await session.get(url, timeout=HTTP_TIMEOUT, headers=HTTP_HEADERS)
         response_html = await response.text()
         soup = BeautifulSoup(response_html, 'html.parser')
-        number_of_books = get_number_of_books(soup)
+        number_of_books = await get_number_of_books(soup)
 
-        logging.info('Calculating total number of pages to download')
+        await logger.info('Calculating total number of pages to download')
         pages = get_number_of_pages(number_of_books)
 
-        logging.info('Downloading all pages concurrently')
+        await logger.info('Downloading all pages concurrently')
         tasks = [get_page(session, i + 1) for i in range(pages)]
         pages = await asyncio.gather(*tasks)
 
-        logging.info('Getting books data')
+        await logger.info('Getting books data')
         flatten = lambda l: [item for sublist in l for item in sublist]
         books = flatten(get_books(page) for page in pages)
 
-        # print(json.dumps(books, indent=2))
-
-        export_to_csv(books)
-
+        await export_to_csv(books)
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
